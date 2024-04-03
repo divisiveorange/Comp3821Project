@@ -10,14 +10,15 @@ public class Encoder {
         for (var arg : args) {
             try {
                 File inputFile = new File(arg);
-                Pixel[][] pixels = convertToPixelArray(inputFile);
-                encode(pixels, inputFile.getName());
+                var pixelsAndDimensions = convertToPixelArray(inputFile);
+                encode(pixelsAndDimensions, inputFile.getName());
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
-    public static void encode(Pixel[][] pixels, String filename) {
+    public static void encode(PixelsAndDimensions pixelsAndDimensions, String filename) {
+        var pixels = pixelsAndDimensions.pixels();
         var leading = FrequencyTable.getLeading(pixels);
         var trailing = FrequencyTable.getTrailing(pixels);
         var table = new FrequencyTable(leading);
@@ -52,7 +53,7 @@ public class Encoder {
         for (var commonLead : mapToEncoder.keySet()) {
             mapToTree.put(commonLead, mapToEncoder.get(commonLead).getTreeHead());
         }
-        SavableData savable = new SavableData(mapToTree, encoder.getTreeHead(), Bit.Compress(bitsList), pixels[0].length, pixels.length, filename);
+        SavableData savable = new SavableData(mapToTree, encoder.getTreeHead(), Bit.Compress(bitsList), pixelsAndDimensions.height(), pixelsAndDimensions.width(), filename);
         System.out.println("Array is " + savable.getBits().bytes().size() / (double) 1000000 + "mb");
         write(savable);
     }
@@ -70,18 +71,16 @@ public class Encoder {
             throw new RuntimeException(e);
         }
     }
-    public static Pixel[][] convertToPixelArray(File inputFile) throws IOException {
+    public static PixelsAndDimensions convertToPixelArray(File inputFile) throws IOException {
         BufferedImage image = ImageIO.read(inputFile);
         int width = image.getWidth();
         int height = image.getHeight();
 
         int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
-        Pixel[][] pixels2D = new Pixel[height][width];
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                pixels2D[y][x] = new Pixel(pixels[y * width + x]);
-            }
+        Pixel[] pixels1D = new Pixel[pixels.length];
+        for (int i = 0; i < pixels.length; i++) {
+            pixels1D[i] = new Pixel(pixels[i]);
         }
-        return pixels2D;
+        return new PixelsAndDimensions(pixels1D, width, height);
     }
 }

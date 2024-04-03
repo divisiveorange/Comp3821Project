@@ -33,21 +33,17 @@ public class FrequencyTable {
         }
         return mostCommon;
     }
-    public static ArrayList<Short> getLeading(Pixel[][] pixels) {
+    public static ArrayList<Short> getLeading(Pixel[] pixels) {
         ArrayList<Short> returnable = new ArrayList<>();
-        for (int i = 0; i < pixels[0].length; i++) {
-            for (int j = 0; j < pixels.length; j++) {
-                returnable.add(pixels[j][i].getLeading());
-            }
+        for (var pixel : pixels) {
+            returnable.add(pixel.getLeading());
         }
         return returnable;
     }
-    public static ArrayList<Short> getTrailing(Pixel[][] pixels) {
+    public static ArrayList<Short> getTrailing(Pixel[] pixels) {
         ArrayList<Short> returnable = new ArrayList<>();
-        for (int i = 0; i < pixels[0].length; i++) {
-            for (int j = 0; j < pixels.length; j++) {
-                returnable.add(pixels[j][i].getTrailing());
-            }
+        for (var pixel : pixels) {
+            returnable.add(pixel.getTrailing());
         }
         return returnable;
     }
