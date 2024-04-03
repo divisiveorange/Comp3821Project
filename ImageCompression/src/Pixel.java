@@ -29,7 +29,7 @@ public class Pixel {
     public Pixel(short leading, short trailing) {
         int leadingInt = ((leading & 0x0F00) << 12) | ((leading & 0x00F0) << 8) | ((leading & 0x000F) << 4);
         int trailingInt = ((trailing & 0x0F00) << 8) | ((trailing & 0x00F0) << 4) | ((trailing & 0x000F));
-        pixel = leadingInt | trailingInt;
+        pixel = leadingInt | trailingInt | 0xFF000000;
     }
     @Override
     public boolean equals(Object o) {

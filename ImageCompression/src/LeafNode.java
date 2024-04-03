@@ -12,6 +12,9 @@ public class LeafNode extends TreeNode {
     public long getFreq() {
         return frequency;
     }
+    public short getValue() {
+        return value;
+    }
     @Override
     public void getMapToBits(HashMap<Short, ArrayList<Bit>> mapToBits, HashMap<ArrayList<Bit>, Short> bitsToMap, ArrayList<Bit> bits) {
         mapToBits.put(value, new ArrayList<Bit>(bits));

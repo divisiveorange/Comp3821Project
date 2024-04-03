@@ -8,7 +8,7 @@ public class TreeXplorer {
     private TreeNode head;
     private TreeNode curr;
     public boolean isEnd() {
-        return curr instanceof BranchNode;
+        return curr instanceof LeafNode;
     }
     public void advance(Bit bit) {
         curr = ((BranchNode) curr).getChildren()[bit.getValue()];
@@ -17,7 +17,10 @@ public class TreeXplorer {
     public ArrayList<Bit> getBits() {
         return bits;
     }
+    public short getContent() {
+        return ((LeafNode) curr).getValue();
+    }
 
-    private ArrayList<Bit> bits;
+    private ArrayList<Bit> bits = new ArrayList<>();
 
 }

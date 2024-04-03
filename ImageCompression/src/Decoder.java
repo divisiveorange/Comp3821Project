@@ -4,10 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class Decoder {
@@ -21,8 +18,10 @@ public class Decoder {
                 SavableData data = (SavableData) objectInStream.readObject();
                 decode(data);
             } catch (IOException e) {
-                System.err.println("Error reading image: " + e.getMessage());
+                System.err.println(arg);
+                e.printStackTrace();
             } catch (ClassNotFoundException e) {
+                System.err.println("Class not found");
                 throw new RuntimeException(e);
             }
         }
@@ -30,7 +29,10 @@ public class Decoder {
     public static void decode(SavableData data) {
         ArrayList<Integer> pixels = new ArrayList<>(data.getHeight()*data.getWidth());
         var bits = Bit.Expand(data.getBits());
-        LinkedList<Bit> queue = new LinkedList<>(bits);
+        LinkedList<Bit> queue = new LinkedList<>();
+        for (var bit : bits) {
+            queue.add(new Bit(bit));
+        }
         var headNode = data.getHeadNode();
         var mapToTrails = data.getMapToTrails();
         while (!queue.isEmpty()) {
@@ -38,22 +40,26 @@ public class Decoder {
             while (!xplorer.isEnd()) {
                 xplorer.advance(queue.removeFirst());
             }
-            var leading = Bit.bitsToShort(xplorer.getBits());
-            ArrayList<Bit> trailingBits;
+            var leading = xplorer.getContent();
+            short trailing;
             if (mapToTrails.containsKey(leading)) {
                 TreeXplorer trailXplorer = new TreeXplorer(mapToTrails.get(leading));
                 while (!trailXplorer.isEnd()) {
                     trailXplorer.advance(queue.removeFirst());
                 }
-                trailingBits = trailXplorer.getBits();
+                trailing= trailXplorer.getContent();
 
             } else {
-                trailingBits = new ArrayList<>();
-                for (int i = 0; i < 12; i++) {
-                    trailingBits.add(queue.removeFirst());
+                ArrayList<Bit> trailingBits = new ArrayList<>();
+                try {
+                    for (int i = 0; i < 12; i++) {
+                        trailingBits.add(queue.removeFirst());
+                    }
+                } catch (Exception e) {
+
                 }
+                trailing = Bit.bitsToShort(trailingBits);
             }
-            var trailing = Bit.bitsToShort(trailingBits);
             pixels.add((new Pixel(leading, trailing)).getInt());
         }
         write(pixels, data.getWidth(), data.getHeight(), data.getFilename());
@@ -67,7 +73,7 @@ public class Decoder {
             if (!directory.exists()) {
                 directory.mkdir();
             }
-            ImageIO.write(image, "png", new File("Decoded_"+ filename));
+            ImageIO.write(image, "png", new File("Decoded/Decoded_"+ filename));
         } catch (IOException e) {
             System.err.println("Error saving image: " + e.getMessage());
         }

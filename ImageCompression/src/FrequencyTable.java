@@ -29,24 +29,24 @@ public class FrequencyTable {
         var pairs = getSorted();
         ArrayList<Short> mostCommon = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            mostCommon.add(pairs.get(0).pixelPart);
+            mostCommon.add(pairs.get(i).pixelPart);
         }
         return mostCommon;
     }
     public static ArrayList<Short> getLeading(Pixel[][] pixels) {
         ArrayList<Short> returnable = new ArrayList<>();
-        for (var part : pixels) {
-            for (var pixel : part) {
-                returnable.add(pixel.getLeading());
+        for (int i = 0; i < pixels[0].length; i++) {
+            for (int j = 0; j < pixels.length; j++) {
+                returnable.add(pixels[j][i].getLeading());
             }
         }
         return returnable;
     }
     public static ArrayList<Short> getTrailing(Pixel[][] pixels) {
         ArrayList<Short> returnable = new ArrayList<>();
-        for (var part : pixels) {
-            for (var pixel : part) {
-                returnable.add(pixel.getTrailing());
+        for (int i = 0; i < pixels[0].length; i++) {
+            for (int j = 0; j < pixels.length; j++) {
+                returnable.add(pixels[j][i].getTrailing());
             }
         }
         return returnable;
