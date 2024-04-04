@@ -63,7 +63,7 @@ public class Decoder {
             }
             pixels.add((new Pixel(leading, trailing)).getInt());
         }
-        write(pixels, data.getWidth(), data.getHeight(), data.getFilename());
+        write(pixels, data.getHeight(), data.getWidth(), data.getFilename());
     }
     public static void write(ArrayList<Integer> pixels, int width, int height, String filename) {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);

@@ -81,6 +81,31 @@ public class Encoder {
         for (int i = 0; i < pixels.length; i++) {
             pixels1D[i] = new Pixel(pixels[i]);
         }
-        return new PixelsAndDimensions(pixels1D, width, height);
+        return new PixelsAndDimensions(flipper(pixels1D, width, height), width, height);
+    }
+    public static Pixel[] flipper(Pixel[] original, int width, int height) {
+        Pixel[][] pixels = new Pixel[height][width];
+        int i = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                pixels[y][x] = original[i];
+                i++;
+            }
+        }
+        Pixel[][] flipped2D = new Pixel[width][height];
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                flipped2D[x][height-1-y] = pixels[y][x];
+            }
+        }
+        i = 0;
+        Pixel[] returnable = new Pixel[width*height];
+        for (var row : flipped2D) {
+            for (var pixel : row) {
+                returnable[i] = pixel;
+                i++;
+            }
+        }
+        return returnable;
     }
 }
