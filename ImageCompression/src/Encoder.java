@@ -22,7 +22,7 @@ public class Encoder {
         var leading = FrequencyTable.getLeading(pixels);
         var trailing = FrequencyTable.getTrailing(pixels);
         var table = new FrequencyTable(leading);
-        var mostCommon = table.getNMostCommon(5);
+        var mostCommon = table.getNMostCommon(580);
         HashMap<Short, ArrayList<Short>> hashMap = new HashMap<>();
         for (var common : mostCommon) {
             hashMap.put(common, new ArrayList<>());

@@ -29,7 +29,11 @@ public class FrequencyTable {
         var pairs = getSorted();
         ArrayList<Short> mostCommon = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            mostCommon.add(pairs.get(i).pixelPart);
+            try {
+                mostCommon.add(pairs.get(i).pixelPart);
+            } catch (Exception e) {
+                return mostCommon;
+            }
         }
         return mostCommon;
     }
