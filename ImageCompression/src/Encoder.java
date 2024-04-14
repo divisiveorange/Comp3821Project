@@ -22,7 +22,7 @@ public class Encoder {
         var leading = FrequencyTable.getLeading(pixels);
         var trailing = FrequencyTable.getTrailing(pixels);
         var table = new FrequencyTable(leading);
-        var mostCommon = table.getNMostCommon(580);
+        var mostCommon = table.getNMostCommon(1000000);
         HashMap<Short, ArrayList<Short>> hashMap = new HashMap<>();
         for (var common : mostCommon) {
             hashMap.put(common, new ArrayList<>());
@@ -54,7 +54,7 @@ public class Encoder {
             mapToTree.put(commonLead, mapToEncoder.get(commonLead).getTreeHead());
         }
         SavableData savable = new SavableData(mapToTree, encoder.getTreeHead(), Bit.Compress(bitsList), pixelsAndDimensions.height(), pixelsAndDimensions.width(), filename);
-        System.out.println("Array is " + savable.getBits().bytes().size() / (double) 1000000 + "mb");
+        System.out.println("Array is " + savable.getBits().bytes().size() / (double) 1000000 + "MB");
         write(savable);
     }
     public static void write(SavableData savable) {

@@ -53,5 +53,4 @@ public class SavableData implements Serializable {
 
     private HashMap<Short, TreeNode> mapToTrails;
     private TreeNode headNode;
-    private ListAndSize bits;
 }
