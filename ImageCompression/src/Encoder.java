@@ -66,10 +66,10 @@ public class Encoder {
             if (!directory.exists()) {
                 directory.mkdir();
             }
-            FileOutputStream fileOutStream = new FileOutputStream("Encoded/Encoded_" + savable.getFilename());
+            FileOutputStream fileOutStream = new FileOutputStream("Encoded/" + savable.getFilename() + ".encoded");
             ObjectOutputStream objectOutStream = new ObjectOutputStream(fileOutStream);
             objectOutStream.writeObject(savable);
-            System.out.println("File Written as: " + "Encoded/Encoded_" + savable.getFilename());
+            System.out.println("File Written as: " + "Encoded/" + savable.getFilename() + ".encoded");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
