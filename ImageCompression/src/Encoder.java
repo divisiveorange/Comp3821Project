@@ -22,7 +22,7 @@ public class Encoder {
         var leading = FrequencyTable.getLeading(pixels);
         var trailing = FrequencyTable.getTrailing(pixels);
         var table = new FrequencyTable(leading);
-        var mostCommon = table.getNMostCommon(1000000);
+        var mostCommon = table.getNMostCommon(100);
         HashMap<Short, ArrayList<Short>> hashMap = new HashMap<>();
         for (var common : mostCommon) {
             hashMap.put(common, new ArrayList<>());
@@ -33,8 +33,10 @@ public class Encoder {
             }
         }
         HashMap<Short, HuffmanEncoder> mapToEncoder = new HashMap<>();
+        var count = 0;
         for (var commonLead : hashMap.keySet()) {
             var trails = hashMap.get(commonLead);
+            count += (new FrequencyTable(trails)).getSorted().size();
             var encoder = new HuffmanEncoder((new FrequencyTable(trails)).getSorted());
             mapToEncoder.put(commonLead, encoder);
         }
@@ -55,6 +57,7 @@ public class Encoder {
         }
         SavableData savable = new SavableData(mapToTree, encoder.getTreeHead(), Bit.Compress(bitsList), pixelsAndDimensions.height(), pixelsAndDimensions.width(), filename);
         System.out.println("Array is " + savable.getBits().bytes().size() / (double) 1000000 + "MB");
+        System.out.println("Compressed " + count + table.getSorted().size() + " sets of bits");
         write(savable);
     }
     public static void write(SavableData savable) {
