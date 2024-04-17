@@ -15,6 +15,7 @@ public class Encoder {
                 paths
                         .filter(Files::isRegularFile)
                         .forEach(path -> {
+                            System.out.print(path);
                             File inputFile = new File(String.valueOf(path));
                             try {
                                 encode(

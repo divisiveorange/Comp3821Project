@@ -1,56 +1,146 @@
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+
 import static java.util.Map.entry;
+
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class EncoderBenchmark {
+    public static String outputName = "BenchmarkResult/output.md";
+
     public static void main(String[] args) {
         for (var arg : args) {
             try (Stream<Path> paths = Files.walk(Paths.get(arg))) {
+                Set<String> resultKeys = new HashSet<>(Arrays.asList("decodeTime", "size", "rawSize"));
+                Map<String, Long> sumOfResults = new HashMap<>();
+                resultKeys.forEach(key -> sumOfResults.put(key, (long)0));
+                AtomicInteger numImages = new AtomicInteger();
+
+                Files.deleteIfExists(Path.of(outputName));
+                OutputStream os = new FileOutputStream(outputName, false); // append mode
+                Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
+                PrintWriter pwFile = new PrintWriter(writer);
+                pwFile.write("# Benchmark Results\n\n");
+                pwFile.close();
+
                 paths
                         .filter(Files::isDirectory)
                         .forEach(folder -> {
-                            if (String.valueOf(folder).equals("Images/BenchmarkImages")) {
+                            if (String.valueOf(folder).equals(arg)) {
                                 return;
                             }
-                            System.out.print("\n" + folder + "\n");
-                            System.out.print("  decode ms   size kB   raw size kB    rate\n");
-                            try (Stream<Path> paths2 = Files.walk(Paths.get(String.valueOf(folder)))) {
-                                paths2
-                                        .filter(Files::isRegularFile)
-                                        .forEach(path -> {
-                                            if (String.valueOf(path.getFileName()).equals("LICENSE.txt")) {
-                                                return;
-                                            }
-                                            System.out.print(path.getFileName() + "\n");
-                                            File inputFile = new File(String.valueOf(path));
-                                            try {
-                                                encode(
-                                                        convertToPixelArray(inputFile),
-                                                        inputFile.getName()
-                                                );
-                                            } catch (IOException e) {
-                                                throw new RuntimeException(e);
-                                            }
-                                        });
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
+                            Map<String, Long> resultOneFolder = mainPerImageFolder(folder, resultKeys);
+                            assert resultOneFolder != null;
+                            resultKeys.forEach(key -> sumOfResults.merge(key, resultOneFolder.get(key), Long::sum));
+                            numImages.addAndGet(resultOneFolder.get("num").intValue());
                         });
+
+                os = new FileOutputStream(outputName, true); // append mode
+                writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
+                pwFile = new PrintWriter(writer);
+                pwFile.write("\n## Sum of all " + numImages + " images\n");
+                printForFolder(pwFile, resultKeys, sumOfResults, numImages);
+                pwFile.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
-    public static void encode(PixelsAndDimensions pixelsAndDimensions, String filename) {
+
+    /**
+     * Prints summary of results for each subfolder, and whole benchmark set
+     *
+     * @param resultKeys set of keys
+     * @param sumOfResults map between resultKeys and the result values
+     * @param numImages the number of images benchmarked
+     */
+    private static void printForFolder(PrintWriter pwFile, Set<String> resultKeys, Map<String, Long> sumOfResults, AtomicInteger numImages) {
+        pwFile.write("<pre>\n     decode ms   size MB   raw size MB     rate\n");
+        printTimeAndRate(pwFile, sumOfResults);
+        pwFile.write("Average\n");
+        resultKeys.forEach(key -> sumOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
+        printTimeAndRate(pwFile, sumOfResults);
+        pwFile.write("</pre>\n\n");
+    }
+
+    public static Map<String, Long> mainPerImageFolder(Path folder, Set<String> resultKeys) {
+        try (Stream<Path> paths = Files.walk(Paths.get(String.valueOf(folder)))) {
+            Map<String, Long> sumOfResults = new HashMap<>();
+            resultKeys.forEach(key -> sumOfResults.put(key, (long)0));
+            AtomicInteger numImagesInFolder = new AtomicInteger();
+
+            OutputStream os = new FileOutputStream(outputName, true); // append mode
+            Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
+            PrintWriter pwFile = new PrintWriter(writer);
+            pwFile.write("## " + folder + "\n<pre>\n     decode ms   size MB   raw size MB     rate\n");
+            pwFile.close();
+
+            paths
+                    .filter(Files::isRegularFile)
+                    .forEach(path -> {
+                        String fileType;
+                        try {
+                            fileType = Files.probeContentType(path);
+                            if (fileType == null) {
+                                return;
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        if (!fileType.startsWith("image")) {
+                            return;
+                        }
+
+                        Long[] sizeDivRem = new Long[] {(long)0, (long)0};
+
+                        File inputFile = new File(String.valueOf(path));
+                        try {
+                            Map<String, Long> resultOneFile = encode(
+                                    convertToPixelArray(inputFile),
+                                    inputFile.getName(),
+                                    sizeDivRem
+                            );
+                            resultKeys.forEach(key -> sumOfResults.merge(key, resultOneFile.get(key), Long::sum));
+                            numImagesInFolder.getAndIncrement();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+            os = new FileOutputStream(outputName, true); // append mode
+            writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
+            pwFile = new PrintWriter(writer);
+            pwFile.write("</pre>\n### Sum for " + folder + ", consisting of " + numImagesInFolder + " images\n");
+            System.out.printf("Completed benchmarking the folder: %s\nTotal size of folder: %8.3f MB\n",
+                    folder,
+                    (float)sumOfResults.get("rawSize")/4096
+            );
+            printForFolder(pwFile, resultKeys, sumOfResults, numImagesInFolder);
+            pwFile.close();
+
+            sumOfResults.put("num", numImagesInFolder.longValue());
+            return sumOfResults;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * Encodes a single image
+     *
+     * @param pixelsAndDimensions contains pixel array and dimensions of image
+     * @param filename to store in output
+     */
+    public static Map<String, Long> encode(PixelsAndDimensions pixelsAndDimensions, String filename, Long[] sizeDivRem) {
         var startTime = System.nanoTime();
 
         var pixels = pixelsAndDimensions.pixels();
@@ -90,33 +180,51 @@ public class EncoderBenchmark {
         for (var commonLead : mapToEncoder.keySet()) {
             mapToTree.put(commonLead, mapToEncoder.get(commonLead).getTreeHead());
         }
-        SavableData savable = new SavableData(mapToTree, encoder.getTreeHead(), Bit.Compress(bitsList), pixelsAndDimensions.height(), pixelsAndDimensions.width(), filename);
-        write(savable, TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startTime));
+        SavableData savable = new SavableData(
+                mapToTree,
+                encoder.getTreeHead(),
+                Bit.Compress(bitsList),
+                pixelsAndDimensions.height(),
+                pixelsAndDimensions.width(),
+                filename
+        );
+
+        return new HashMap<>(write(savable, System.nanoTime() - startTime, sizeDivRem));
     }
-    public static void write(SavableData savable, long time) {
+    public static Map<String, Long> write(SavableData savable, long time, Long[] sizeDivRem) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(baos);
             oos.writeObject(savable);
             oos.close();
             baos.close();
-            printTimeAndRate(Map.ofEntries(
-                    entry("decodeTime", time),
-                    entry("size", (long)baos.size()),
-                    entry("rawSize", ((long)savable.getHeight() * (long)savable.getWidth() * 3))
-            ));
+            Map<String, Long> resultMap = Map.ofEntries(
+                    entry("decodeTime", time / 100),
+                    entry("size", (baos.size() + sizeDivRem[0]) / 256),
+                    entry("rawSize", (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1]) / 256))
+            );
+            sizeDivRem[0] = (baos.size() + sizeDivRem[0]) % 256;
+            sizeDivRem[1] = (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1]) % 256);
+
+            OutputStream os = new FileOutputStream(outputName, true); // append mode
+            Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
+            PrintWriter pwFile = new PrintWriter(writer);
+            pwFile.write(savable.getFilename() + "\n");
+            printTimeAndRate(pwFile, resultMap);
+            pwFile.close();
+            return resultMap;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-    public static void printTimeAndRate(Map<String, Long> result) {
-        System.out.printf(
-                "   %8.3f  %8.3f      %8.3f   %4.1f%%\n",
-                (double)result.get("decodeTime")/1000,
-                result.get("size")/Math.pow(1024, 2),
-                result.get("rawSize")/Math.pow(1024, 2),
+    public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result) {
+        pwFile.write(String.format(
+                "    %10.3f  %8.3f      %8.3f   %5.1f%%\n",
+                (double)TimeUnit.NANOSECONDS.toMicros(result.get("decodeTime"))/10,
+                (float)result.get("size")/4096,
+                (float)result.get("rawSize")/4096,
                 ((double)result.get("size")/(double)result.get("rawSize")) * 100.0
-        );
+        ));
     }
     public static PixelsAndDimensions convertToPixelArray(File inputFile) throws IOException {
         BufferedImage image = ImageIO.read(inputFile);
