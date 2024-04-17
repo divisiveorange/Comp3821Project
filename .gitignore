@@ -1,2 +1,3 @@
-src/Images
-src/Encoded
+ImageCompression/src/Images
+ImageCompression/src/Encoded
+.DS_Store
