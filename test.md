@@ -1,7 +1,6 @@
 # Benchmark Results
 
 ## Images/BenchmarkImages/icon_64
-
 <pre>
   decode ms   size kB   raw size kB    rate
 apps-help-browser.png
