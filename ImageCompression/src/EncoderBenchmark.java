@@ -64,10 +64,12 @@ public class EncoderBenchmark {
      */
     private static void printForFolder(PrintWriter pwFile, Set<String> resultKeys, Map<String, Long> sumOfResults, AtomicInteger numImages) {
         pwFile.write("<pre>\n     decode ms   size MB   raw size MB     rate\n");
-        printTimeAndRate(pwFile, sumOfResults);
+        printTimeAndRate(pwFile, sumOfResults, (long)4096);
         pwFile.write("Average\n");
-        resultKeys.forEach(key -> sumOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
-        printTimeAndRate(pwFile, sumOfResults);
+        Map<String, Long> averageOfResults = new HashMap<>();
+        resultKeys.forEach(key -> averageOfResults.put(key, sumOfResults.get(key)));
+        resultKeys.forEach(key -> averageOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
+        printTimeAndRate(pwFile, averageOfResults, (long)4096);
         pwFile.write("</pre>\n\n");
     }
 
@@ -108,6 +110,8 @@ public class EncoderBenchmark {
                                     inputFile.getName(),
                                     sizeDivRem
                             );
+                            resultOneFile.put("size", resultOneFile.get("size") / 256);
+                            resultOneFile.put("rawSize", resultOneFile.get("rawSize") / 256);
                             resultKeys.forEach(key -> sumOfResults.merge(key, resultOneFile.get(key), Long::sum));
                             numImagesInFolder.getAndIncrement();
                         } catch (IOException e) {
@@ -200,8 +204,8 @@ public class EncoderBenchmark {
             baos.close();
             Map<String, Long> resultMap = Map.ofEntries(
                     entry("decodeTime", time / 100),
-                    entry("size", (baos.size() + sizeDivRem[0]) / 256),
-                    entry("rawSize", (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1]) / 256))
+                    entry("size", (baos.size() + sizeDivRem[0])),
+                    entry("rawSize", (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1])))
             );
             sizeDivRem[0] = (baos.size() + sizeDivRem[0]) % 256;
             sizeDivRem[1] = (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1]) % 256);
@@ -210,19 +214,19 @@ public class EncoderBenchmark {
             Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
             PrintWriter pwFile = new PrintWriter(writer);
             pwFile.write(savable.getFilename() + "\n");
-            printTimeAndRate(pwFile, resultMap);
+            printTimeAndRate(pwFile, resultMap, (long)Math.pow(1024, 2));
             pwFile.close();
             return resultMap;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-    public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result) {
+    public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result, Long sizeDivider) {
         pwFile.write(String.format(
                 "    %10.3f  %8.3f      %8.3f   %5.1f%%\n",
                 (double)TimeUnit.NANOSECONDS.toMicros(result.get("decodeTime"))/10,
-                (float)result.get("size")/4096,
-                (float)result.get("rawSize")/4096,
+                (float)result.get("size")/sizeDivider,
+                (float)result.get("rawSize")/sizeDivider,
                 ((double)result.get("size")/(double)result.get("rawSize")) * 100.0
         ));
     }
