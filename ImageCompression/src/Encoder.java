@@ -1,17 +1,31 @@
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.stream.Stream;
 
 public class Encoder {
     public static void main(String[] args) {
         for (var arg : args) {
-            try {
-                File inputFile = new File(arg);
-                var pixelsAndDimensions = convertToPixelArray(inputFile);
-                encode(pixelsAndDimensions, inputFile.getName());
+            try (Stream<Path> paths = Files.walk(Paths.get(arg))) {
+                paths
+                        .filter(Files::isRegularFile)
+                        .forEach(path -> {
+                            System.out.print(path);
+                            File inputFile = new File(String.valueOf(path));
+                            try {
+                                encode(
+                                        convertToPixelArray(inputFile),
+                                        inputFile.getName()
+                                );
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
             } catch (IOException e) {
                 e.printStackTrace();
             }
