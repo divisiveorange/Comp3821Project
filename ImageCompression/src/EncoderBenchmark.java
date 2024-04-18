@@ -16,6 +16,13 @@ import java.util.stream.Stream;
 public class EncoderBenchmark {
     public static String outputName = "BenchmarkResult/output.md";
 
+    /**
+     * Runs encoder for all folders with images
+     * keeps count of the number of images in total
+     * prints result for the full benchmark set
+     *
+     * @param args input
+     */
     public static void main(String[] args) {
         for (var arg : args) {
             try (Stream<Path> paths = Files.walk(Paths.get(arg))) {
@@ -56,23 +63,14 @@ public class EncoderBenchmark {
     }
 
     /**
-     * Prints summary of results for each subfolder, and whole benchmark set
+     * performs encoding for one folder of images
+     * prints summary result for a folder to output
+     * keeps count of the number of images in the folder
      *
-     * @param resultKeys set of keys
-     * @param sumOfResults map between resultKeys and the result values
-     * @param numImages the number of images benchmarked
+     * @param folder the path to the folder of images
+     * @param resultKeys set of keys to store result in
+     * @return map of results for a folder
      */
-    private static void printForFolder(PrintWriter pwFile, Set<String> resultKeys, Map<String, Long> sumOfResults, AtomicInteger numImages) {
-        pwFile.write("<pre>\n     decode ms   size MB   raw size MB     rate\n");
-        printTimeAndRate(pwFile, sumOfResults, (long)4096);
-        pwFile.write("Average\n");
-        Map<String, Long> averageOfResults = new HashMap<>();
-        resultKeys.forEach(key -> averageOfResults.put(key, sumOfResults.get(key)));
-        resultKeys.forEach(key -> averageOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
-        printTimeAndRate(pwFile, averageOfResults, (long)4096);
-        pwFile.write("</pre>\n\n");
-    }
-
     public static Map<String, Long> mainPerImageFolder(Path folder, Set<String> resultKeys) {
         try (Stream<Path> paths = Files.walk(Paths.get(String.valueOf(folder)))) {
             Map<String, Long> sumOfResults = new HashMap<>();
@@ -101,14 +99,11 @@ public class EncoderBenchmark {
                             return;
                         }
 
-                        Long[] sizeDivRem = new Long[] {(long)0, (long)0};
-
                         File inputFile = new File(String.valueOf(path));
                         try {
                             Map<String, Long> resultOneFile = encode(
                                     convertToPixelArray(inputFile),
-                                    inputFile.getName(),
-                                    sizeDivRem
+                                    inputFile.getName()
                             );
                             resultOneFile.put("size", resultOneFile.get("size") / 256);
                             resultOneFile.put("rawSize", resultOneFile.get("rawSize") / 256);
@@ -143,8 +138,9 @@ public class EncoderBenchmark {
      *
      * @param pixelsAndDimensions contains pixel array and dimensions of image
      * @param filename to store in output
+     * @return map of results for an image
      */
-    public static Map<String, Long> encode(PixelsAndDimensions pixelsAndDimensions, String filename, Long[] sizeDivRem) {
+    public static Map<String, Long> encode(PixelsAndDimensions pixelsAndDimensions, String filename) {
         var startTime = System.nanoTime();
 
         var pixels = pixelsAndDimensions.pixels();
@@ -193,9 +189,18 @@ public class EncoderBenchmark {
                 filename
         );
 
-        return new HashMap<>(write(savable, System.nanoTime() - startTime, sizeDivRem));
+        return new HashMap<>(write(savable, System.nanoTime() - startTime));
     }
-    public static Map<String, Long> write(SavableData savable, long time, Long[] sizeDivRem) {
+
+    /**
+     * Finds size of encoded image, and creates map of data from encoding
+     * Prints the data for one file to the output
+     *
+     * @param savable encoded image data
+     * @param duration time to encode in nanoseconds
+     * @return results for a file as map
+     */
+    public static Map<String, Long> write(SavableData savable, long duration) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(baos);
@@ -203,12 +208,10 @@ public class EncoderBenchmark {
             oos.close();
             baos.close();
             Map<String, Long> resultMap = Map.ofEntries(
-                    entry("decodeTime", time / 100),
-                    entry("size", (baos.size() + sizeDivRem[0])),
-                    entry("rawSize", (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1])))
+                    entry("decodeTime", duration / 100),
+                    entry("size", (long)baos.size()),
+                    entry("rawSize", (long) savable.getHeight() * (long) savable.getWidth() * 3)
             );
-            sizeDivRem[0] = (baos.size() + sizeDivRem[0]) % 256;
-            sizeDivRem[1] = (((long) savable.getHeight() * (long) savable.getWidth() * 3 + sizeDivRem[1]) % 256);
 
             OutputStream os = new FileOutputStream(outputName, true); // append mode
             Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
@@ -221,6 +224,31 @@ public class EncoderBenchmark {
             throw new RuntimeException(e);
         }
     }
+    /**
+     * Prints summary of results for each subfolder, and whole benchmark set
+     *
+     * @param resultKeys set of keys
+     * @param sumOfResults map between resultKeys and the result values
+     * @param numImages the number of images benchmarked
+     */
+    private static void printForFolder(PrintWriter pwFile, Set<String> resultKeys, Map<String, Long> sumOfResults, AtomicInteger numImages) {
+        pwFile.write("<pre>\n     decode ms   size MB   raw size MB     rate\n");
+        printTimeAndRate(pwFile, sumOfResults, (long)4096);
+        pwFile.write("Average\n");
+        Map<String, Long> averageOfResults = new HashMap<>();
+        resultKeys.forEach(key -> averageOfResults.put(key, sumOfResults.get(key)));
+        resultKeys.forEach(key -> averageOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
+        printTimeAndRate(pwFile, averageOfResults, (long)4096);
+        pwFile.write("</pre>\n\n");
+    }
+
+    /**
+     * Prints size, rate, and time to encode using a map of values
+     *
+     * @param pwFile printWriter to write to output
+     * @param result map of keys and observed results
+     * @param sizeDivider variable to divide size by to get in MB
+     */
     public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result, Long sizeDivider) {
         pwFile.write(String.format(
                 "    %10.3f  %8.3f      %8.3f   %5.1f%%\n",
