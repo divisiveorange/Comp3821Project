@@ -26,7 +26,7 @@ public class EncoderBenchmark {
     public static void main(String[] args) {
         for (var arg : args) {
             try (Stream<Path> paths = Files.walk(Paths.get(arg))) {
-                Set<String> resultKeys = new HashSet<>(Arrays.asList("decodeTime", "size", "rawSize"));
+                Set<String> resultKeys = new HashSet<>(Arrays.asList("encodeTime", "size", "rawSize"));
                 Map<String, Long> sumOfResults = new HashMap<>();
                 resultKeys.forEach(key -> sumOfResults.put(key, (long)0));
                 AtomicInteger numImages = new AtomicInteger();
@@ -80,7 +80,7 @@ public class EncoderBenchmark {
             OutputStream os = new FileOutputStream(outputName, true); // append mode
             Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
             PrintWriter pwFile = new PrintWriter(writer);
-            pwFile.write("## " + folder + "\n<pre>\n     decode ms   size MB   raw size MB     rate\n");
+            pwFile.write("## " + folder + "\n<pre>\n     encode ms   size MB   raw size MB     rate       n\n");
             pwFile.close();
 
             paths
@@ -147,49 +147,92 @@ public class EncoderBenchmark {
         var leading = FrequencyTable.getLeading(pixels);
         var trailing = FrequencyTable.getTrailing(pixels);
         var table = new FrequencyTable(leading);
-        var mostCommon = table.getNMostCommon(100);
-        HashMap<Short, ArrayList<Short>> hashMap = new HashMap<>();
-        for (var common : mostCommon) {
-            hashMap.put(common, new ArrayList<>());
-        }
-        for (int i = 0; i < leading.size(); i++) {
-            if (hashMap.containsKey(leading.get(i))) {
-                hashMap.get(leading.get(i)).add(trailing.get(i));
-            }
-        }
-        HashMap<Short, HuffmanEncoder> mapToEncoder = new HashMap<>();
-        var count = 0;
-        for (var commonLead : hashMap.keySet()) {
-            var trails = hashMap.get(commonLead);
-            count += (new FrequencyTable(trails)).getSorted().size();
-            var encoder = new HuffmanEncoder((new FrequencyTable(trails)).getSorted());
-            mapToEncoder.put(commonLead, encoder);
-        }
-        var encoder = new HuffmanEncoder(table.getSorted());
-        var bitsMap = encoder.getMapToBits();
-        ArrayList<Bit> bitsList = new ArrayList<>();
-        for (int i = 0; i < leading.size(); i++) {
-            bitsList.addAll(bitsMap.get(leading.get(i)));
-            if (mapToEncoder.containsKey(leading.get(i))) {
-                bitsList.addAll((mapToEncoder.get(leading.get(i))).getMapToBits().get(trailing.get(i)));
-            } else {
-                bitsList.addAll(Bit.ShortToBits(trailing.get(i)));
-            }
-        }
-        HashMap<Short, TreeNode> mapToTree = new HashMap<>();
-        for (var commonLead : mapToEncoder.keySet()) {
-            mapToTree.put(commonLead, mapToEncoder.get(commonLead).getTreeHead());
-        }
-        SavableData savable = new SavableData(
-                mapToTree,
-                encoder.getTreeHead(),
-                Bit.Compress(bitsList),
-                pixelsAndDimensions.height(),
-                pixelsAndDimensions.width(),
-                filename
-        );
+        var headEncoder = new HuffmanEncoder(table.getSorted());
+        var bitsMap = headEncoder.getMapToBits();
 
-        return new HashMap<>(write(savable, System.nanoTime() - startTime));
+        int n = 0;
+        var pairs = table.getSorted();
+        ArrayList<Short> nMostCommon = new ArrayList<>();
+        HashMap<Short, ArrayList<Short>> hashMap = new HashMap<>();
+        HashMap<Short, HuffmanEncoder> mapToEncoder = new HashMap<>();
+        HashMap<Short, TreeNode> mapToTree = new HashMap<>();
+
+        ArrayList<Long> bestSize = new ArrayList<>() {};
+        SavableData best = null;
+
+        for (; n < 4096; n++) {
+            short nextCommon;
+            try {
+                nextCommon = pairs.get(n).pixelPart;
+            } catch (Exception ignored) {
+                n++;
+                break;
+            }
+
+            nMostCommon.add(nextCommon);
+            hashMap.put(nextCommon, new ArrayList<>());
+            for (int i = 0; i < leading.size(); i++) {
+                if (nextCommon == leading.get(i)) {
+                    hashMap.get(nextCommon).add(trailing.get(i));
+                }
+            }
+
+            var trails = hashMap.get(nextCommon);
+            var encoder = new HuffmanEncoder((new FrequencyTable(trails)).getSorted());
+            mapToEncoder.put(nextCommon, encoder);
+
+            ArrayList<Bit> bitsList = new ArrayList<>();
+            for (int i = 0; i < leading.size(); i++) {
+                bitsList.addAll(bitsMap.get(leading.get(i)));
+                if (mapToEncoder.containsKey(leading.get(i))) {
+                    bitsList.addAll((mapToEncoder.get(leading.get(i))).getMapToBits().get(trailing.get(i)));
+                } else {
+                    bitsList.addAll(Bit.ShortToBits(trailing.get(i)));
+                }
+            }
+
+            mapToTree.put(nextCommon, mapToEncoder.get(nextCommon).getTreeHead());
+            SavableData savable = new SavableData(
+                    mapToTree,
+                    encoder.getTreeHead(),
+                    Bit.Compress(bitsList),
+                    pixelsAndDimensions.height(),
+                    pixelsAndDimensions.width(),
+                    filename
+            );
+
+            long size = testSize(savable);
+            if (bestSize.isEmpty()) {
+                bestSize.add(0, (long)n);
+                bestSize.add(1, size);
+                best = savable;
+            } else {
+                if (bestSize.get(1) > size) {
+                    bestSize.set(0, (long)n);
+                    bestSize.set(1, size);
+                    best = savable;
+                } else if (n > 5 + bestSize.get(0)) {
+                    break;
+                }
+            }
+        }
+
+        return new HashMap<>(write(best, System.nanoTime() - startTime, bestSize.get(1), bestSize.get(0)));
+    }
+
+    public static long testSize(SavableData savable) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(baos);
+            oos.writeObject(savable);
+            oos.close();
+            baos.close();
+            long size = baos.size();
+            baos.reset();
+            return size;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -200,16 +243,11 @@ public class EncoderBenchmark {
      * @param duration time to encode in nanoseconds
      * @return results for a file as map
      */
-    public static Map<String, Long> write(SavableData savable, long duration) {
+    public static Map<String, Long> write(SavableData savable, long duration, long size, long n) {
         try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ObjectOutputStream oos = new ObjectOutputStream(baos);
-            oos.writeObject(savable);
-            oos.close();
-            baos.close();
             Map<String, Long> resultMap = Map.ofEntries(
-                    entry("decodeTime", duration / 100),
-                    entry("size", (long)baos.size()),
+                    entry("encodeTime", duration / 100),
+                    entry("size", size),
                     entry("rawSize", (long) savable.getHeight() * (long) savable.getWidth() * 3)
             );
 
@@ -217,7 +255,7 @@ public class EncoderBenchmark {
             Writer writer = new OutputStreamWriter(os, StandardCharsets.UTF_8);
             PrintWriter pwFile = new PrintWriter(writer);
             pwFile.write(savable.getFilename() + "\n");
-            printTimeAndRate(pwFile, resultMap, (long)Math.pow(1024, 2));
+            printTimeAndRate(pwFile, resultMap, (long)Math.pow(1024, 2), n);
             pwFile.close();
             return resultMap;
         } catch (IOException e) {
@@ -232,13 +270,13 @@ public class EncoderBenchmark {
      * @param numImages the number of images benchmarked
      */
     private static void printForFolder(PrintWriter pwFile, Set<String> resultKeys, Map<String, Long> sumOfResults, AtomicInteger numImages) {
-        pwFile.write("<pre>\n     decode ms   size MB   raw size MB     rate\n");
-        printTimeAndRate(pwFile, sumOfResults, (long)4096);
+        pwFile.write("<pre>\n     encode ms   size MB   raw size MB     rate\n");
+        printTimeAndRate(pwFile, sumOfResults, (long)4096, (long)-1);
         pwFile.write("Average\n");
         Map<String, Long> averageOfResults = new HashMap<>();
         resultKeys.forEach(key -> averageOfResults.put(key, sumOfResults.get(key)));
         resultKeys.forEach(key -> averageOfResults.merge(key, numImages.longValue(), Long::divideUnsigned));
-        printTimeAndRate(pwFile, averageOfResults, (long)4096);
+        printTimeAndRate(pwFile, averageOfResults, (long)4096, (long)-1);
         pwFile.write("</pre>\n\n");
     }
 
@@ -249,14 +287,25 @@ public class EncoderBenchmark {
      * @param result map of keys and observed results
      * @param sizeDivider variable to divide size by to get in MB
      */
-    public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result, Long sizeDivider) {
-        pwFile.write(String.format(
-                "    %10.3f  %8.3f      %8.3f   %5.1f%%\n",
-                (double)TimeUnit.NANOSECONDS.toMicros(result.get("decodeTime"))/10,
-                (float)result.get("size")/sizeDivider,
-                (float)result.get("rawSize")/sizeDivider,
-                ((double)result.get("size")/(double)result.get("rawSize")) * 100.0
-        ));
+    public static void printTimeAndRate(PrintWriter pwFile, Map<String, Long> result, Long sizeDivider, Long n) {
+        if (n == -1) {
+            pwFile.write(String.format(
+                    "    %10.3f  %8.3f      %8.3f   %5.1f%%\n",
+                    (double)TimeUnit.NANOSECONDS.toMicros(result.get("decodeTime"))/10,
+                    (float)result.get("size")/sizeDivider,
+                    (float)result.get("rawSize")/sizeDivider,
+                    ((double)result.get("size")/(double)result.get("rawSize")) * 100.0
+            ));
+        } else {
+            pwFile.write(String.format(
+                    "    %10.3f  %8.3f      %8.3f   %5.1f%%%8d\n",
+                    (double)TimeUnit.NANOSECONDS.toMicros(result.get("decodeTime"))/10,
+                    (float)result.get("size")/sizeDivider,
+                    (float)result.get("rawSize")/sizeDivider,
+                    ((double)result.get("size")/(double)result.get("rawSize")) * 100.0,
+                    n
+            ));
+        }
     }
     public static PixelsAndDimensions convertToPixelArray(File inputFile) throws IOException {
         BufferedImage image = ImageIO.read(inputFile);
