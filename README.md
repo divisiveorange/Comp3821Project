@@ -4,7 +4,7 @@ Basic testing on several 12mp photos (raw photos converted to lossless jpgs), sh
 
 Instructions
 
-Run Java -Xms512m -Xmx15000m Encoder {fileToEncode} {possibleOtherFileToEncode} to encode
+Run Java -Xms512m -Xmx15000m Encoder {JpgFileToEncode} {possibleOtherFileToEncode} to encode
 
 and Java -Xms512m -Xmx15000m Decoder {fileToDecode} {possibleOtherFileToDecode} to decode
 
