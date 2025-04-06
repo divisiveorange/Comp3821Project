@@ -4,9 +4,9 @@ Basic testing on several 12mp photos (raw photos converted to lossless jpgs), sh
 
 Instructions
 
-Run Java Encoder {fileToEncode} {possibleOtherFileToEncode} to encode
+Run Java -Xms512m -Xmx15000m Encoder {fileToEncode} {possibleOtherFileToEncode} to encode
 
-and Java Decoder {fileToDecode} {possibleOtherFileToDecode} to decode
+and Java -Xms512m -Xmx15000m Decoder {fileToDecode} {possibleOtherFileToDecode} to decode
 
 Rationale behind decisions:
 
